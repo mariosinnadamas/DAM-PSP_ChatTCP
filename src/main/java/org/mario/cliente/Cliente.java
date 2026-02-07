@@ -16,15 +16,21 @@ public class Cliente {
 
             System.out.println("Cliente iniciado y conectado a " + socket.getPort());
 
-            new HiloEnviar().start();
+            HiloEnviar envio = new HiloEnviar(salida);
+            HiloRecibir recibir = new HiloRecibir(entrada);
+            envio.start();
+            recibir.start();
 
-
+            envio.join(); //Para hacer esperar al main
+            recibir.join();
 
             System.out.println("Desconectando...");
 
         } catch (UnknownHostException e) {
             throw new RuntimeException(e);
         } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }

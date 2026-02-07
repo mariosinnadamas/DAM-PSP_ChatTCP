@@ -12,29 +12,21 @@ public class Server {
     public static void main(String[] args) {
         int nPuerto = 6000;
         List<ClienteHandler> clientes = new ArrayList<>();
-        try (ServerSocket server = new ServerSocket(nPuerto)){
-            System.out.println("Servidor iniciado...");
+        while (true){
+            try (ServerSocket server = new ServerSocket(nPuerto)){
+                System.out.println("Servidor iniciado...");
+                while (true){
+                    Socket socket = server.accept();
+                    System.out.println("Cliente aceptado: " + socket.getInetAddress());
 
-            Socket cliente = server.accept();
-            System.out.println("Cliente conectado desde " + cliente.getInetAddress());
-
-            DataInputStream flujoEntrada = new DataInputStream(cliente.getInputStream());
-            DataOutputStream flujoSalida = new DataOutputStream(cliente.getOutputStream());
-
-            String mensaje;
-
-            while (!(mensaje = flujoEntrada.readUTF()).equalsIgnoreCase("*")){
-                System.out.println("Mensaje del cliente: " + mensaje);
-                flujoSalida.writeUTF("ECO DEL SERVIDOR " + mensaje);
+                    ClienteHandler ch = new ClienteHandler(socket,clientes);
+                    clientes.add(ch);
+                    ch.start();
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
 
-            System.out.println("Cerrando servidor...");
-
-            flujoEntrada.close();
-            flujoSalida.close();
-            cliente.close();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
     }
 }
