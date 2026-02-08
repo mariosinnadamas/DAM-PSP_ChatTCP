@@ -1,8 +1,10 @@
 package org.mario.cliente;
+/**
+ * Esta clase se encarga de recibir los mensajes e imprimirlos por pantalla.
+ */
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.Scanner;
 
 public class HiloRecibir extends Thread {
 
@@ -20,7 +22,7 @@ public class HiloRecibir extends Thread {
                 System.out.println(mensaje);
             }
         } catch (IOException e) {
-            System.err.println("Servidor desconectado");
+            System.err.println("Conexión cerrada");
         }
     }
 }
