@@ -25,8 +25,8 @@ public class HiloEnviar extends Thread{
     public void run() {
        try {
            String mensaje;
+           System.out.println("Introduce un mensaje (* para salir)");
            while (true){
-               System.out.println("Introduce un mensaje (* para salir)");
                mensaje = sc.nextLine();
                salida.writeUTF(mensaje);
                if (mensaje.equalsIgnoreCase("*")){

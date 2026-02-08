@@ -13,6 +13,12 @@ public class Cliente {
             Socket socket = new Socket("localhost",6000);
             DataInputStream entrada = new DataInputStream(socket.getInputStream());
             DataOutputStream salida = new DataOutputStream(socket.getOutputStream());
+
+            Scanner sc = new Scanner(System.in);
+            System.out.print("Introduce tu nombre de usuario: ");
+            String nombre = sc.nextLine();
+            salida.writeUTF(nombre);
+
             System.out.println("Cliente iniciado y conectado a " + socket.getPort());
 
             //El cliente tiene 2 hilos, uno para enviar mensajes y otro para leerlos
