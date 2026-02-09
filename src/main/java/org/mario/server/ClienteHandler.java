@@ -41,7 +41,7 @@ public class ClienteHandler extends Thread{
 
         if (espacio == -1) {
             nick = mensaje.substring(1);
-            contenido = ""; // Contenido vacío
+            contenido = "";
         } else {
             nick = mensaje.substring(1, espacio);
             contenido = mensaje.substring(espacio + 1).trim();
@@ -49,12 +49,36 @@ public class ClienteHandler extends Thread{
         return new String[] {nick, contenido};
     }
 
+    /**
+     * Si el nick es único, se almacena y confirma. De lo contrario, se solicita al cliente que escriba otro nick.
+     *
+     * @param entrada DataInputStream El cliente envía el nick como una cadena UTF que se convertirá a minúsculas.
+     * @param salida DataOutputStream Envía "CORRECTO" si el apodo es único o "REPETIDO" si ya está en uso.
+     *
+     * @throws IOException if an I/O error occurs while reading or writing data to the client.
+     */
+    public void validarNickName(DataInputStream entrada, DataOutputStream salida) throws IOException {
+        while (true) {
+            nickName = entrada.readUTF().toLowerCase();
+
+            // si no existe devuelve null
+            if (clientes.putIfAbsent(nickName, this) == null) {
+                salida.writeUTF("CORRECTO");
+                salida.flush();
+                break;
+            } else {
+                salida.writeUTF("REPETIDO");
+                salida.flush();
+            }
+        }
+    }
+
     @Override
     public void run() {
         try{
             System.out.println("Hilo Handler iniciado");
-            nickName = entrada.readUTF();
-            Server.altaCliente(nickName, this);
+
+            validarNickName(entrada, salida);
 
             while (true){
                 String mensaje = entrada.readUTF().trim();

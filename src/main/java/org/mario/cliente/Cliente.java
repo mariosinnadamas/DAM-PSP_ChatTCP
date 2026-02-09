@@ -7,17 +7,36 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.Scanner;
 
+
 public class Cliente {
     public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+
+        String nombre;
         try {
             Socket socket = new Socket("localhost",6000);
             DataInputStream entrada = new DataInputStream(socket.getInputStream());
             DataOutputStream salida = new DataOutputStream(socket.getOutputStream());
 
-            Scanner sc = new Scanner(System.in);
-            System.out.print("Introduce tu nombre de usuario: ");
-            String nombre = sc.nextLine();
-            salida.writeUTF(nombre);
+
+            while (true) {
+                System.out.print("Introduce tu nombre de usuario: ");
+                nombre = sc.nextLine();
+
+                if (nombre == null || nombre.isBlank()){
+                    System.out.println("El nombre no puede estar vacío");
+                    continue;
+                }
+
+                salida.writeUTF(nombre);
+
+                String respuesta = entrada.readUTF();
+                if (respuesta.equals("CORRECTO")) {
+                    break;
+                } else if (respuesta.equals("REPETIDO")) {
+                    System.out.println("Ese nickName ya está en uso");
+                }
+            }
 
             System.out.println("Cliente iniciado y conectado a " + socket.getPort());
 
