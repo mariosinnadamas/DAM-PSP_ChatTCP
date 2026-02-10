@@ -7,21 +7,29 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.Scanner;
 
-
+/**
+ * Clase cliente que se le asocia un nickname, valida su disponibilidad con el servidor
+ * y luego inicia los hilos para enviar y recibir mensajes.
+ */
 public class Cliente {
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
+        Socket socket = null;
+        DataInputStream entrada = null;
+        DataOutputStream salida = null;
 
-        String nombre;
         try {
-            Socket socket = new Socket("localhost",6000);
-            DataInputStream entrada = new DataInputStream(socket.getInputStream());
-            DataOutputStream salida = new DataOutputStream(socket.getOutputStream());
+            socket = new Socket("localhost", 6000);
+            entrada = new DataInputStream(socket.getInputStream());
+            salida = new DataOutputStream(socket.getOutputStream());
 
+            String nombre;
 
+            //Validación del nickname
             while (true) {
                 System.out.print("Introduce tu nombre de usuario: ");
                 nombre = sc.nextLine();
+
 
                 if (nombre == null || nombre.isBlank()){
                     System.out.println("El nombre no puede estar vacío");
@@ -29,8 +37,8 @@ public class Cliente {
                 }
 
                 salida.writeUTF(nombre);
-
                 String respuesta = entrada.readUTF();
+
                 if (respuesta.equals("CORRECTO")) {
                     break;
                 } else if (respuesta.equals("REPETIDO")) {
@@ -40,16 +48,32 @@ public class Cliente {
 
             System.out.println("Cliente iniciado y conectado a " + socket.getPort());
 
-            //El cliente tiene 2 hilos, uno para enviar mensajes y otro para leerlos
+            //Iniciar hilos de envío y recepción
             HiloEnviar envio = new HiloEnviar(salida,socket);
             HiloRecibir recibir = new HiloRecibir(entrada);
+
             envio.start();
             recibir.start();
 
         } catch (UnknownHostException e) {
-            throw new RuntimeException(e);
+            System.err.println("ERROR: No se pudo conectar con el servidor. Revisa la dirección.");
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            System.err.println("ERROR: No se pudo establecer la conexión con el servidor.");
+            System.err.println("MOTIVO: " + e.getMessage());
+        } finally {
+            //Cierre de recursos
+            // (ignored para indicar que se sabe que ahí puede suceder una excepción pero que no necesita ser tratada)
+            if (socket != null && socket.isClosed()) {
+                try {
+                    if (entrada != null) entrada.close();
+                } catch (IOException ignored) {}
+                try {
+                    if (salida != null) salida.close();
+                } catch (IOException ignored) {}
+                try {
+                    socket.close();
+                } catch (IOException ignored) {}
+            }
         }
     }
 }

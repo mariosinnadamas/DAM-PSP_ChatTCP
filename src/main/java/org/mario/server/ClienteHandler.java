@@ -4,33 +4,46 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import static org.mario.server.Server.canales;
 
 /**
- * Clase hilo del servidor que gestiona las peticiones del cliente
+ * Hilo del servidor encargado de gestionar la comunicación con un cliente concreto.
+ * Cada cliente conectado al servidor se maneja mediante una instancia de esta clase,
+ * lo que permite que varios clientes funcionen de forma concurrente
  */
 public class ClienteHandler extends Thread{
 
-    String nickName;
-    String destinatario;
+    private String nickName; //Nombre del usuario (clave en el HashMap)
+    private String destinatario;
     private Socket socket;
-    private Map<String, ClienteHandler> clientes;
+    private String canalActual = "general";
+    private Map<String, ClienteHandler> clientes; //Mapa de clientes conectados
     private DataInputStream entrada;
     private DataOutputStream salida;
+
+    /**
+     * Constructor del manejador de clientes.
+     * El constructor recibe por parámetro el Socket (cliente) y el Map con clientes.
+     * @param socket asociado al cliente
+     * @param clientes mapa de clientes conectados
+     * @throws IOException
+     */
 
     public ClienteHandler(Socket socket, Map<String, ClienteHandler> clientes) throws IOException {
         this.socket = socket;
         this.clientes = clientes;
         this.entrada = new DataInputStream(socket.getInputStream());
-        this.salida = new DataOutputStream((socket.getOutputStream()));
+        this.salida = new DataOutputStream(socket.getOutputStream());
     }
 
     /**
-     * Lectura del mensaje en destino al chat privado
+     * Lectura del mensaje en destino al chat privado. Formato "@usuario contenido"
      *
-     * @param mensaje la entrada del argumento, esperando '@' como primer caracter seguido del nickname y del contenido
-     * @return Un Array de Strings donde el primer elemento es el nickname y el segundo elemento el contenido.
+     * @param mensaje Mensaje recibido del cliente
+     * @return Array con dos elementos: [Nickname, contenido]
      */
     public String[] leerNickName(String mensaje){
         mensaje = mensaje.trim();
@@ -55,13 +68,12 @@ public class ClienteHandler extends Thread{
      * @param entrada DataInputStream El cliente envía el nick como una cadena UTF que se convertirá a minúsculas.
      * @param salida DataOutputStream Envía "CORRECTO" si el apodo es único o "REPETIDO" si ya está en uso.
      *
-     * @throws IOException if an I/O error occurs while reading or writing data to the client.
+     * @throws IOException si un error de I/o ocurre mientras se está escribiendo leyendo datos del cliente.
      */
     public void validarNickName(DataInputStream entrada, DataOutputStream salida) throws IOException {
         while (true) {
             nickName = entrada.readUTF().toLowerCase();
 
-            // si no existe devuelve null
             if (clientes.putIfAbsent(nickName, this) == null) {
                 salida.writeUTF("CORRECTO");
                 salida.flush();
@@ -73,47 +85,118 @@ public class ClienteHandler extends Thread{
         }
     }
 
+    /**
+     * Metodo para cambiar del canal general a otro canal.
+     * Lo elimina de su canal anterior y lo añade al nuevo.
+     * @param nuevoCanal El nombre del nuevo canal al que se quiere mover el usuario.
+     */
+
+    public void cambiarCanal(String nuevoCanal){
+        // Salir del canal actual
+        if (canalActual != null && canales.containsKey(canalActual)) {
+            canales.get(canalActual).remove(this);
+        }
+
+        // PutIfAbsent sirve para añadir un par clave-valor solo si la clave no existe o si está asociada a un valor null
+        // Copy es una colección segura para hilos, optimizada para entornos concurrentes que se va a leer mucho más de lo que se va a modificar
+
+        canales.putIfAbsent(nuevoCanal, new CopyOnWriteArrayList<>());
+        canales.get(nuevoCanal).add(this);
+
+        canalActual = nuevoCanal;
+
+        System.out.println(nickName + " se ha unido al canal " + nuevoCanal);
+    }
+
+    /**
+     * Procesa comandos especiales enviados por el cliente.
+     * - //salir → vuelve al canal general
+     * - //nombreCanal → cambia al canal indicado
+     */
+
+    public void procesarComando(String comando) throws IOException{
+
+        if (comando.equalsIgnoreCase("//salir")){
+            cambiarCanal("general");
+            salida.writeUTF("Has vuelto al chat general");
+            return;
+        }
+
+        if (comando.startsWith("//") && comando.length() > 2){
+            String canal = comando.substring(2).trim();
+            cambiarCanal(canal);
+            salida.writeUTF("Te has unido al canal " + canalActual);
+        }
+    }
+
+    /**
+     * Metodo principal del hilo.
+     * Gestiona:
+     * - Validación del nickname
+     * - Recepción de mensajes
+     * - Envío de mensajes públicos y privados
+     * - Cambio de canales
+     */
+
     @Override
     public void run() {
         try{
-            System.out.println("Hilo Handler iniciado");
-
             validarNickName(entrada, salida);
+            cambiarCanal("general");
 
             while (true){
                 String mensaje = entrada.readUTF().trim();
-                // identificacion si es privado o no
+
+                // Mensaje privado
                 if (mensaje.startsWith("@")){
                     String[] partes = leerNickName(mensaje);
                     destinatario = partes[0];
                     String contenido = partes[1];
 
-                    System.out.println(mensaje);
+                    System.out.println("Mensaje privado: " + mensaje);
 
                     ClienteHandler destino = clientes.get(destinatario);
-                    if (destino != null){
-                        destino.salida.writeUTF( nickName + ": " + contenido);
-                    }
 
+                    if (destino != null && destino.canalActual.equals(this.canalActual)){
+                        destino.salida.writeUTF( "(privado) | " + nickName + ": " + contenido);
+                    } else {
+                        salida.writeUTF("El usuario no está en tu canal");
+                    }
+                    //Comando
+                } else if (mensaje.startsWith("//")) {
+                    procesarComando(mensaje);
+
+                    //Mensaje público
                 } else {
                     System.out.println(mensaje);
-
-                    for (ClienteHandler c : clientes.values()){
+                    for (ClienteHandler c : canales.get(canalActual)){
                         if (c != this){
-                            c.salida.writeUTF("todos: " + mensaje);
+                            c.salida.writeUTF(canalActual + " | " + nickName + ": " + mensaje);
                         }
                     }
                 }
             }
+
         } catch (IOException e) {
-            System.err.println("Cliente desconectado: " + socket.getInetAddress());
+            System.err.println("ERROR: Cliente desconectado: " + nickName + " (" + socket.getInetAddress() + ")");
         } finally {
-            synchronized (clientes){ //Si un cliente se desconecta o pasa cualquier cosa lo elimina de la lista
+            //Elimino del mapa global
+            synchronized (clientes){
                 if (nickName != null) {
                     clientes.remove(nickName);
                 }
-
             }
+
+            //Elimino del canal actual
+            if (canalActual != null && canales.containsKey(canalActual)){
+                canales.get(canalActual).remove(this);
+            }
+
+            //Cerrar streams
+            try {
+                if (salida != null) salida.close();
+            } catch (IOException e) {}
+
             try {
                 socket.close();
             } catch (IOException e) {}

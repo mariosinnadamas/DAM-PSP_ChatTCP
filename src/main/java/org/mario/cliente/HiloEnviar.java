@@ -9,6 +9,11 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.Scanner;
 
+/**
+ * Hilo encargado de enviar mensajes al servidor.
+ * Lee mensajes desde consola y los envía a través del socket.
+ * Si el usuario escribe '*', se desconecta del servidor.
+ */
 public class HiloEnviar extends Thread{
 
     private DataOutputStream salida;
@@ -24,18 +29,32 @@ public class HiloEnviar extends Thread{
     @Override
     public void run() {
        try {
-           String mensaje;
            System.out.println("Introduce un mensaje (* para salir)");
+
            while (true){
-               mensaje = sc.nextLine();
+               String mensaje = sc.nextLine();
+
+               //Envia mensaje al servidor
                salida.writeUTF(mensaje);
+
+               //Si el usuario quiere salir
                if (mensaje.equalsIgnoreCase("*")){
+                   System.out.println("Desconectado del servidor...");
                    socket.close();
                    break;
                }
            }
        } catch (IOException e) {
-           e.printStackTrace();
+           System.err.println("ERROR: No se pudo enviar el mensaje. Posible desconexión del servidor.");
+       } finally {
+           // Cerrar recursos
+           try {
+               if (salida != null) salida.close();
+           } catch (IOException ignored) {}
+           try { if (socket != null && !socket.isClosed()) socket.close();
+           } catch (IOException ignored) {}
+
+           sc.close();
        }
     }
 }
